@@ -14,6 +14,7 @@ Vagrant.configure("2") do |config|
   # Unfortunately this breaks Ansible provisioning with Vagrant,
   # so the key insertion feature should be disabled.
   config.ssh.insert_key = false
+  config.ssh.username = "vagrant"
 
   config.vm.define 'development', primary: true do |development|
     development.vm.hostname = "development"
