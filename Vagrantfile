@@ -167,6 +167,7 @@ Vagrant.configure("2") do |config|
     # This is what image to name to use for the app and monitor server OSs on
     # Digital Ocean.
     provider.image = DIGITAL_OCEAN_IMAGE_NAME
+    provider.setup = 'true'
     provider.region = 'nyc2'
     provider.size = '512mb'
   end
