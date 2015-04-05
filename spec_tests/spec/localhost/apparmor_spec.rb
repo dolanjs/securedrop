@@ -7,8 +7,7 @@ require 'spec_helper'
   end
 end
 
-# Required apparmor profiles configs
-#
+# Custom Apparmror profiles
 # SecureDrop apache apparmor profile
 describe file('/etc/apparmor.d/usr.sbin.apache2') do
   it { should be_file }
@@ -19,8 +18,11 @@ describe file('/etc/apparmor.d/usr.sbin.apache2') do
   its(:content) { should match "/usr/sbin/apache2 {" }
 end
 
+# TODO: Check that other system default apparmor profiles have the correct bin and do
+# not contain the word complain. (ntp, tor)
+
 # Check that apparmor is enabled.
-# The command returns error code if AppArmor not enabled
+# The command returns error code if AppArmor is not enabled
 describe command("aa-status --enabled") do
   it { should_not return_stderr }
 end
@@ -41,3 +43,7 @@ end
 describe command("aa-status") do
   it { should return_stdout /0 processes are unconfined but have a profile defined/ }
 end
+
+# TODO: Ensure that there are no profiles in audit mode
+
+# TODO: Ensure all listening services have an apparmor profile defined
