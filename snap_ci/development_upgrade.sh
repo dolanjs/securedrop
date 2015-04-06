@@ -13,7 +13,7 @@
 # vagrant_rpm vagrant_1.7.2_x86_64.rpm
 # DO_SSH_KEYFILE_NAME Vagrant
 # DO_IMAGE_NAME {HOSTNAME}-{TAGGED-VERSION}
-# DO_REGION nyc2
+# DO_REGION nyc3
 # DO_SIZE 1gb
 # DEVELOPMENT_SKIP_TAGS non-development
 # DO_API_TOKEN ***
