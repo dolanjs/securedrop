@@ -28,6 +28,11 @@ set -e
 # Destroy them so you start with a clean tagged version from a snapshot.
 vagrant destroy development -f
 
+# If you destroy the instance you need to give DO a few seconds before you can
+# up that host again or else when you try to run vagrant up again it will still
+# report that the droplet is already active.
+sleep 20
+
 # Up the host in a separate command to avoid snap-ci command timeouts.
 vagrant up development --no-provision
 vagrant provision development
