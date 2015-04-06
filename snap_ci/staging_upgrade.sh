@@ -34,6 +34,7 @@
 # monitor_hostname: "mon-staging"
 # app_hostname: "app-staging"
 # app_ip: "{{ lookup('env', 'MON_IP') }}"
+set -e
 
 # If the previous pipleing failed the droplets wouldn't of been destroyed.
 # Destroy them so you start with a clean tagged version from a snapshot.
