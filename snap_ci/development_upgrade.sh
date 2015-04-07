@@ -22,10 +22,11 @@
 # Owner Logical Name            File         Mode
 # USER  snap_digital_ocean      /var/snap-ci/repo/id_rsa        0600
 # USER  snap_digital_ocean.pub  /var/snap-ci/repo/id_rsa.pub    0600
-set -e
+#set -e
 
 # The droplet should be running a fresh install of the previous tagged version
 # of SecureDrop.
+vagrant up development --no-provision
 vagrant status development | grep 'running'
 
 vagrant provision development
