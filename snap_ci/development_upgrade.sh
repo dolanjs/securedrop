@@ -24,17 +24,10 @@
 # USER  snap_digital_ocean.pub  /var/snap-ci/repo/id_rsa.pub    0600
 set -e
 
-# If the previous pipleing failed the droplets wouldn't of been destroyed.
-# Destroy them so you start with a clean tagged version from a snapshot.
-vagrant destroy development -f
+# The droplet should be running a fresh install of the previous tagged version
+# of SecureDrop.
+vagrant status development | grep 'running'
 
-# If you destroy the instance you need to give DO a few seconds before you can
-# up that host again or else when you try to run vagrant up again it will still
-# report that the droplet is already active.
-sleep 20
-
-# Up the host in a separate command to avoid snap-ci command timeouts.
-vagrant up development --no-provision
 vagrant provision development
 
 # Run serverspec tests
@@ -45,4 +38,4 @@ cd /var/snap-ci/repo/spec_tests/
 
 # Destroy the droplets since you will want to start builds with a fresh tagged
 # release and to save money.
-vagrant destroy development -f
+#vagrant destroy development -f
