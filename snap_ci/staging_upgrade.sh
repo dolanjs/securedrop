@@ -66,7 +66,7 @@ DO_IMAGE_NAME=$MON_IMAGE_NAME vagrant up mon-staging --no-provision
 # playbook.
 # will need to refactor the playbooks so this is not needed.
 STAGING_TAGS='gather_facts' vagrant provision /staging/
-# Unset tags to run 
+# Unset tags to run
 STAGING_TAGS=''
 
 # Register the ip addresses for app-staging and mon-staging vars to use in the
