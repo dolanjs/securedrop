@@ -1,6 +1,20 @@
 # declare desired iptables rules
 # These rules should be present in prod and staging
 # TODO: There are also hardcoded IP addresses in this section.
+
+desired_iptables_chains = [
+  '-P INPUT DROP',
+  '-P FORWARD DROP',
+  '-P OUTPUT DROP',
+  '-N LOGNDROP',
+]
+
+desired_ip6tables_chains = [
+  '-P INPUT DROP',
+  '-P FORWARD DROP',
+  '-P OUTPUT DROP',
+]
+
 desired_iptables_rules = [
   '-A INPUT -p tcp -m tcp --dport 8080 -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT',
   '-A INPUT -p tcp -m tcp --dport 80 -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT',
@@ -68,5 +82,15 @@ describe iptables do
   end
   desired_iptables_rules.each do |desired_iptables_rule|
     it { should have_rule(desired_iptables_rule) }
+  end
+  desired_iptables_chains.each do |desired_iptables_chain|
+    it { should have_rule(desired_iptables_chain) }
+  end
+end
+
+# check the default action for IP v6 chains
+describe ip6tables do
+  desired_ip6tables_chains.each do |desired_ip6tables_chain|
+    it { should have_rule(desired_ip6tables_chain) }
   end
 end
