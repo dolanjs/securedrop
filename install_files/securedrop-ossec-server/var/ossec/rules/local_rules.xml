@@ -1,7 +1,19 @@
 <!--
-  Alert on cron-apt warnings and errors
+  The default iptables decoder just matches the string ^kernel
+  This will match all events in the kern.log. To get around this
+  use the rule option `<if_sid>100001</if_sid>` instead of
+  <decoded_as>kernel</decoded_as>
 -->
-<group name="cron-apt">
+<group name="kernel_log">
+  <rule id="100001" level="0">
+    <decoded_as>iptables</decoded_as>
+  </rule>
+</group>
+
+<!--
+  Cron-apt alert section
+-->
+<group name="cron_apt">
   <rule id="100002" level="0">
     <decoded_as>cron-apt</decoded_as>
     <description>Custom cron-apt alert</description>
@@ -21,18 +33,9 @@
 </group>
 
 <!--
-  The default iptables decoder just matches the string ^kernel
-  This will match all events in the kern.log. To get around this
-  use the rule option `<if_sid>100001</if_sid>` instead of
-  <decoded_as>kernel</decoded_as>
--->
-<group name="kernel log">
-  <rule id="100001" level="0">
-    <decoded_as>iptables</decoded_as>
-  </rule>
-</group>
-<!--
-  Alert on apparmor denied events
+  Apparmor section for alerts
+  Status and Allowed events should be whitelisted
+  Everything else should be alerted on.
 -->
 <group name="apparmor">
   <rule id="100011" level="0">
@@ -55,7 +58,8 @@
 </group>
 
 <!--
-  Grsec related rules. Info and expected events should be whitelisted.
+  Grsec section for alerts
+  Info and expected events should be whitelisted.
   All other grsec events should be alerted on.
 -->
 <group name="grsec">
@@ -74,10 +78,85 @@
 </group>
 
 <!--
-  Do not alert on stagging VM dhcp client errors. These events should not occur
-  in production environments
+  Admin activity section for alerts
+  Admin access and actions taken should be alerted on.
+  Care should be taken to between risk of information disclosure of
+  sensitive info vs knowing exactly what the admin did.
 -->
-<group name="stagging vm errors">
+<group name="admin_activity">
+  <rule id="100201" level="3">
+    <if_group>authentication_success</if_group>
+    <description>Successful Admin Authentication</description>
+    <info type="text">The Journalist should verify that this access was intentional</info>
+    <options>alert_by_email</options>
+  </rule>
+
+  <rule id="100202" level="7">
+    <if_group>authentication_failure</if_group>
+    <description>Failed Admin Authentication</description>
+    <options>alert_by_email</options>
+    <info>The Journalist should verify this is an Admin's typo</info>
+  </rule>
+</group>
+
+<!--
+  Health Check section
+  Alerting when the system state changes to a failed state.
+-->
+<group name="generic_health_check">
+  <rule id="531" level="9" ignore="7200" overwrite="yes">
+    <if_sid>530</if_sid>
+    <match>ossec: output: 'df -h':</match>
+    <regex>100%</regex>
+    <description>Partition usage reached 100% (disk space monitor).</description>
+    <group>low_diskspace,</group>
+    <options>alert_by_email</options>
+  </rule>
+
+  <rule id="531" level="9" ignore="7200" overwrite="yes">
+    <if_sid>530</if_sid>
+    <match>ossec: output: 'df -h':</match>
+    <regex>9[0-9]%</regex>
+    <description>Partition usage is over 90% (disk space monitor).</description>
+    <group>low_diskspace,</group>
+    <options>alert_by_email</options>
+  </rule>
+
+  <rule id="531" level="9" ignore="7200" overwrite="yes">
+    <if_sid>530</if_sid>
+    <match>ossec: output: 'df -h':</match>
+    <regex>8[0-9]%</regex>
+    <description>Partition usage is over 80% (disk space monitor).</description>
+    <group>low_diskspace,</group>
+    <options>alert_by_email</options>
+  </rule>
+
+  <rule id="531" level="9" ignore="7200" overwrite="yes">
+    <if_sid>530</if_sid>
+    <match>ossec: output: 'df -h':</match>
+    <regex>7[0-9]%</regex>
+    <description>Partition usage is over 70% (disk space monitor).</description>
+    <group>low_diskspace,</group>
+    <options>alert_by_email</options>
+  </rule>
+</group>
+
+<group name="monitoring_devices">
+  <rule id="504" level="7" overwrite="yes">
+    <if_sid>500</if_sid>
+    <match>Agent disconnected</match>
+    <description>Ossec agent disconnected.</description>
+    <options>alert_by_email</options>
+  </rule>
+</group>
+
+<!--
+  Staging only events section
+  Suppress staging only false positives
+  Set the severity level of the event to less than 7 os
+  add the option `no_email_alert`
+-->
+<group name="stagging_vm_errors">
   <rule id="110030" level="0">
     <decoded_as>dhclient</decoded_as>
     <match>Failed to send 300 byte long packet over fallback interface.</match>
@@ -86,12 +165,19 @@
   </rule>
 </group>
 
+
 <!--
-  The python gnupg library that securedrop uses includes an obsolete option
-  WARNING:gnupg no-use-agent is an obsolete option - it has no effect
-  Do not send an alert for this event.
+  Production exemptions.
+  Do not alert on these events in production
+  Set the severity level of the event to less than 7
+  add the option `no_email_alert`
 -->
-<group name="do not alert">
+<group name="do_not_alert">
+  <!--
+    The python gnupg library that securedrop uses includes an obsolete option
+    WARNING:gnupg no-use-agent is an obsolete option - it has no effect
+    Do not send an alert for this event.
+  -->
   <rule id="199997" level="0">
     <decoded_as>gpg warning</decoded_as>
     <match>--no-use-agent" is an obsolete option - it has no effect</match>
@@ -99,10 +185,10 @@
     <options>no_email_alert</options>
   </rule>
 
-<!--
-  The rootcheck detects the hidden file blkid.tab as suspicious
-  do not send and alert for it.
--->
+  <!--
+    The rootcheck detects the hidden file blkid.tab as suspicious
+    do not send and alert for it.
+  -->
   <rule id="199998" level="0">
     <if_sid>510</if_sid>
     <match>/dev/.blkid.tab</match>
