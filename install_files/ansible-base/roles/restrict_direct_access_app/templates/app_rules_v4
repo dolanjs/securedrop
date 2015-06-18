@@ -2,6 +2,8 @@
 :INPUT DROP [0:0]
 :FORWARD DROP [0:0]
 :OUTPUT DROP [0:0]
+# LOGNDROP is a non-default chain. It is used to add all the logging options
+# in one place instead of every drop rule.
 :LOGNDROP - [0:0]
 
 # Tor Network Section
@@ -61,8 +63,9 @@
 -A OUTPUT -m owner --uid-owner www-data -j LOGNDROP
 
 
-# OSSEC server-agent rules
+# OSSEC agent-server rules
 #
+# * Only the ossec agent initiates traffic to the ossec server
 # TODO need to wait for anisble re-org to be able to add the interface to the
 # OSSEC rule. Currently in virtualbox staging environment the interface is not
 # the {{ansible_default_ipv4.interface}} variable.
@@ -106,6 +109,10 @@
 
 
 # LOGNDROP everything else
+#
+# * rate limit the drop events without a burst to avoid ddos the system
+# * The tcp logndrop rule has an additional logging option enabled that doesn't
+# apply to other protocols
 -A LOGNDROP -p tcp -m limit --limit 5/min -j LOG --log-tcp-options --log-ip-options --log-uid --log-level 4
 -A LOGNDROP -m limit --limit 5/min -j LOG --log-ip-options --log-uid --log-level 4
 -A LOGNDROP -j DROP
