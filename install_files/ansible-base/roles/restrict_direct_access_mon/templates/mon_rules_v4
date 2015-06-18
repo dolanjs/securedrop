@@ -50,21 +50,20 @@
 # OSSEC smtp out rules
 #
 # * dns rule for postfix to lookup smtp relay
--A OUTPUT -d {{ dns_server }} -p tcp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
--A INPUT -s {{ dns_server }} -p tcp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
--A OUTPUT -d {{ dns_server }} -p udp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
--A INPUT -s {{ dns_server }} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -d {{ dns_server }} -p udp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+# This rule is a duplicate of the later matched DNS section
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -s {{ dns_server }} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # postfix rule for outbound smtp
--A OUTPUT -p tcp --dport {{ smtp_relay_port }} -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
--A INPUT -p tcp --sport {{ smtp_relay_port }}  -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -p tcp --dport {{ smtp_relay_port }} -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -p tcp --sport {{ smtp_relay_port }}  -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # OSSEC agent-server rules
 #
 # * Only the ossec agent initiates traffic to the ossec server
 # TODO need to wait for anisble re-org to be able to add the interface to the
 # OSSEC rule. Currently in virtualbox staging environment the interface is not
-# the {{ansible_default_ipv4.interface}} variable.
+# the {{ansible_default_ipv4.interface}} variable and also has a different ip
 -A OUTPUT -d {{ app_hostname }} -p udp --sport 1514 -m owner --uid-owner ossec -m state --state ESTABLISHED,RELATED -j ACCEPT
 -A INPUT -s {{ app_hostname }} -p udp --dport 1514 -m state --state ESTABLISHED,RELATED -j ACCEPT
 -A OUTPUT -m owner --uid-owner ossec -j LOGNDROP
@@ -75,6 +74,8 @@
 
 # DNS Section
 -A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -d {{ dns_server }}  -p udp --dport 53 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+# This rule is a duplicate of the earlier matched OSSEC smtp out rules (only on
+# the monitor server)
 -A INPUT -i {{ansible_default_ipv4.interface}} -s  {{ dns_server }} -d {{ansible_default_ipv4.address}} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # NTP Section
