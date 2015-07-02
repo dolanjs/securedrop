@@ -131,19 +131,31 @@ ossec_apt_dependencies:
   - adduser
 
 agent_auth_rules:
+  # In the virtualized environments this does not use the default interface.
+  # Not able to restrict this by the interface until that is resolved.
   - "-A OUTPUT -d {{ monitor_ip  }} -p tcp --dport 1515 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
   - "-A INPUT -s {{ monitor_ip }} -p tcp --sport 1515 -m state --state ESTABLISHED,RELATED -j ACCEPT"
 
 ### Used by the restrict access role ###
+# The direct access rules will be loaded by the intended system in the reverse
+# order that is listed here. Be careful with the order of any drop rules.
 direct_access_rules:
-  - "-A INPUT -p tcp --dport 22 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A OUTPUT -p tcp --sport 22 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A OUTPUT -p udp --dport 53 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A INPUT -p udp --sport 53 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A INPUT -p tcp --dport 80 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A OUTPUT -p tcp --sport 80 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
-  - "-A OUTPUT -p tcp --sport 8080 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
+  # Direct ssh with rate limiting
+  # Rate limiting is added to the direct access ssh exemption to act like the
+  # rate limiting used for ssh connections over tor in production.
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p tcp --dport 22 -m state --state ESTABLISHED,RELATED -j ACCEPT"
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p tcp --dport 22 -m state --state NEW -j LOGNDROP"
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p tcp --dport 22 -m state --state NEW -m limit --limit-burst 3 --limit 3/min -j ACCEPT"
+  - "-A OUTPUT -o {{ansible_default_ipv4.interface}} -p tcp --sport 22 -m state --state ESTABLISHED,RELATED -m owner --uid-owner root -j ACCEPT"
+  # Allow DNS from the virtualbox host
+  - "-A OUTPUT -o {{ansible_default_ipv4.interface}} -p udp --dport 53 -m state --state NEW,ESTABLISHED,RELATED -m owner --uid-owner root -j ACCEPT"
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT"
+  # Allow direct access to source interface
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p tcp --dport 80 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
+  - "-A OUTPUT -o {{ansible_default_ipv4.interface}} -p tcp --sport 80 -m state --state ESTABLISHED,RELATED -m owner --uid-owner www-data -j ACCEPT"
+  # Allow direct access to document interface
+  - "-A INPUT -i {{ansible_default_ipv4.interface}} -p tcp --dport 8080 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT"
+  - "-A OUTPUT -o {{ansible_default_ipv4.interface}} -p tcp --sport 8080 -m state --state ESTABLISHED,RELATED -m owner --uid-owner www-data -j ACCEPT"
 
 test_apt_dependencies:
   - firefox

@@ -1,71 +1,118 @@
 *filter
-:INPUT ACCEPT [0:0]
-:FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [0:0]
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT DROP [0:0]
+# LOGNDROP is a non-default chain. It is used to add all the logging options
+# in one place instead of every drop rule.
 :LOGNDROP - [0:0]
 
-# Allow the tor instance used for ssh access
--A OUTPUT -p tcp -m owner --uid-owner debian-tor -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow Tor out"
--A INPUT -p tcp -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow traffic back for tor"
+# Tor Network Section
+#
+# * The Tor client initiates the connection to the tor network.
+# * Allow outbound new connections from the tor client to the tor network.
+# * Tor nodes could be run on any port or any IP address.
+# * The distant end can not be restricted by ip address or port.
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -p tcp -m owner --uid-owner debian-tor -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -p tcp -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# Rate limit ssh connections coming from the tor network
-# Restrict to users in the ssh group
-# Load before generic loopback rules
--A OUTPUT -o lo -p tcp --dport 22 -m owner --uid-owner debian-tor -m state --state NEW -m limit --limit 3/min --limit-burst 3 -j ACCEPT -m comment --comment "SSH with rate limiting only thur tor"
--A OUTPUT -o lo -p tcp --dport 22 -m owner --uid-owner debian-tor -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "SSH with rate limiting only thur tor"
 
-# Drop all other outbound traffic by the tor users.
-# Load before generic loopback rules
--A OUTPUT -m owner --uid-owner debian-tor -j LOGNDROP -m comment --comment "Drop all other traffic for the tor instance used for ssh"
+# Tor client to Tor Hidden Service Section
+#
+# * Tor proxies traffic from the tor client to apache and ssh.
+# * The tor client initiates the connection to both apache and ssh servers.
+# * Apache has two vhosts on ports 80 and 8080 ssh is on port 22
+# * In production apache and ssh only listen on the local loopback.
+-A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --match multiport --dports 22,80,8080 -m owner --uid-owner debian-tor -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --match multiport --sport 22,80,8080 -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m owner --uid-owner debian-tor -j LOGNDROP
 
-# Block all other outbound access for users in the ssh group
-# Load before generic loopback rules
--A OUTPUT -m owner --gid-owner ssh -j LOGNDROP -m comment --comment "Drop all other outbound traffic for ssh user"
 
-# DNS rules
--A OUTPUT -d {{ dns_server }} -p tcp --dport 53 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
--A INPUT -s {{ dns_server }} -p tcp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
--A OUTPUT -d {{ dns_server }} -p udp --dport 53 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
--A INPUT -s {{ dns_server }} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
+# SSH Over Tor Hidden Service Section
+#
+# * In Prod environments the ssh server only listens on the local loopback
+# and all ssh connections are forced over tor.
+# * Rate limit all inbound connection on the local loopback to the ssh server
+# limit-burst is set to '3' which means the limit of 3/min only starts after
+# the first three connection are made.
+# * To test will need to try to create 7 connections. The 7th (and any
+# additional attempts during that minute) will be dropped.
+# * If the tor authenticated hidden service is compromised this can be used
+# as a DDOS vector.
+# * SSH runs as root as you can not restrict the output rule based on the ssh
+# group user id.
+# * Still drop all other traffic for users in the ssh group at the end of this
+# section.
+-A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --dport 22 -m state --state NEW -m limit --limit-burst 3 --limit 3/min -j ACCEPT
+-A INPUT -p tcp --dport 22 -m state --state NEW -j LOGNDROP
+-A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --dport 22 -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --sport 22 -m owner --uid-owner root -m state --state  ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m owner --gid-owner ssh -j LOGNDROP
 
-# NTP rules
--A OUTPUT -p udp --sport 123 --dport 123 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "ntp"
--A INPUT -p udp --sport 123 --dport 123 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "ntp"
-
-# apt rules can't be restricted by destination address because iptables will only resolve FQDNs once at startup
--A OUTPUT -p tcp --match multiport --dports 80,8080,443 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "apt updates"
--A INPUT -p tcp --match multiport --sports 80,8080,443 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "apt updates"
-
-# OSSEC server-agent rules
-# TODO add owner to OUTPUT rule
--A INPUT -s {{ app_hostname }} -p udp --dport 1514 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow OSSEC agent to monitor"
--A OUTPUT -d {{ app_hostname }} -p udp --sport 1514 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow OSSEC agent to monitor"
 
 # OSSEC smtp out rules
-# dns rule for postfix to lookup smtp relay
--A OUTPUT -d {{ dns_server }} -p tcp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "postfix dns rule"
--A INPUT -s {{ dns_server }} -p tcp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
--A OUTPUT -d {{ dns_server }} -p udp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "postfix dns rule"
--A INPUT -s {{ dns_server }} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "tcp/udp dns"
+#
+# * dns rule for postfix to lookup smtp relay
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -d {{ dns_server }} -p udp --dport 53 -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+# This rule is a duplicate of the later matched DNS section
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -s {{ dns_server }} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # postfix rule for outbound smtp
--A OUTPUT -p tcp --dport {{ smtp_relay_port }} -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow ossec email alerts out"
--A INPUT -p tcp --sport {{ smtp_relay_port }}  -m state --state ESTABLISHED,RELATED -j ACCEPT -m comment --comment "Allow ossec email alerts out"
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -p tcp --dport {{ smtp_relay_port }} -m owner --uid-owner postfix -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -p tcp --sport {{ smtp_relay_port }}  -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# Allow generic loopback connections
--A INPUT -i lo -p all -j ACCEPT -m comment --comment "Allow lo to lo traffic all protocols"
--A OUTPUT -o lo -p all -j ACCEPT -m comment --comment "Allow lo to lo traffic all protocols"
+# OSSEC agent-server rules
+#
+# * Only the ossec agent initiates traffic to the ossec server
+# TODO need to wait for anisble re-org to be able to add the interface to the
+# OSSEC rule. Currently in virtualbox staging environment the interface is not
+# the {{ansible_default_ipv4.interface}} variable and also has a different ip
+-A OUTPUT -d {{ app_hostname }} -p udp --sport 1514 -m owner --uid-owner ossec -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -s {{ app_hostname }} -p udp --dport 1514 -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m owner --uid-owner ossec -j LOGNDROP
+
+
+# DNS, NTP, apt-get all run as root. Do not add a drop rule for the root user
+# till the very end or with no rules between these and the catch all drop rule.
+
+# DNS Section
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -d {{ dns_server }}  -p udp --dport 53 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+# This rule is a duplicate of the earlier matched OSSEC smtp out rules (only on
+# the monitor server)
+-A INPUT -i {{ansible_default_ipv4.interface}} -s  {{ dns_server }} -d {{ansible_default_ipv4.address}} -p udp --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# NTP Section
+#
+# * The NTP servers are round robin so you are not able to restrict by their IP
+# address.
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -p udp --sport 123 --dport 123 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -p udp --sport 123 --dport 123 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Apt-get Section
+#
+# * apt-get updates/upgrades are not over tor.
+# * The apt mirrors servers are round robin so you are not able to restrict by
+# their ip address since iptables only resolve FQDNs once at startup.
+-A OUTPUT -o {{ansible_default_ipv4.interface}} -s {{ansible_default_ipv4.address}} -p tcp --match multiport --dports 80,443 -m owner --uid-owner root -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i {{ansible_default_ipv4.interface}} -d {{ansible_default_ipv4.address}} -p tcp --match multiport --sports 80,443 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Root Drop rule
+-A OUTPUT -m owner --uid-owner root -j LOGNDROP
 
 # Don't log inbound invalid state packets related to issue #845
--A INPUT -p tcp -m state --state INVALID -j DROP -m comment --comment "drop but do not log inbound invalid state packets"
+-A INPUT -p tcp -m state --state INVALID -j DROP
+
 
 # Catch all drop rule
--A INPUT -j LOGNDROP -m comment --comment "Log and drop all other incomming traffic"
--A OUTPUT -j DROP -m comment --comment "Drop all other outgoing traffic"
+-A OUTPUT -j LOGNDROP
+-A INPUT -j LOGNDROP
 
-# LOGNDROP inbound non whitelisted traffic
--A LOGNDROP -p tcp -m limit --limit 5/min -j LOG --log-ip-options --log-tcp-options --log-uid --log-level 4
--A LOGNDROP -p udp -m limit --limit 5/min -j LOG --log-ip-options --log-uid --log-level 4
--A LOGNDROP -p icmp -m limit --limit 5/min -j LOG --log-ip-options --log-uid --log-level 4
+
+# LOGNDROP everything else
+#
+# * rate limit the drop events without a burst to avoid ddos the system
+# * The tcp logndrop rule has an additional logging option enabled that doesn't
+# apply to other protocols
+-A LOGNDROP -p tcp -m limit --limit 5/min -j LOG --log-tcp-options --log-ip-options --log-uid --log-level 4
+-A LOGNDROP -m limit --limit 5/min -j LOG --log-ip-options --log-uid --log-level 4
 -A LOGNDROP -j DROP
 COMMIT
