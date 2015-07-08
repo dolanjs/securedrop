@@ -52,7 +52,7 @@
 # Apache Over Tor Hidden Service Section
 #
 # * Apache and Redis are ran as the same user. Do not implement the default
-# output chain drop for the www-date before allowing the required reddis
+# output chain drop for the www-date before allowing the required redis
 # traffic.
 # * The Redis and Apache rules use different tcp flags and port directions so
 # can not be combined.
@@ -60,11 +60,14 @@
 # * Apache has 2 vhosts that listen on ports 80 and 8080
 -A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --match multiport --dports 80,8080 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
 -A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --match multiport --sport 80,8080 -m owner --uid-owner www-data -m state --state ESTABLISHED,RELATED -j ACCEPT
-# * Reddis listens on port 6379
--A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --dport 6379 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
--A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --sport 6379 -m owner --uid-owner www-data -m state --state ESTABLISHED,RELATED -j ACCEPT
+# * Apache to Redis connection
+-A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --dport 6379 -m owner --uid-owner www-data -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --sport 6379 -m state --state ESTABLISHED,RELATED -j ACCEPT
 -A OUTPUT -m owner --uid-owner www-data -j LOGNDROP
-
+# * Redis to Apache connection
+-A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --dport 6379 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -p tcp --sport 6379 -m owner --uid-owner redis -m state --state ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m owner --uid-owner redis -j LOGNDROP
 
 # OSSEC agent-server rules
 #
