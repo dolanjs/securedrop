@@ -69,6 +69,7 @@ def retrieve_vars(hostname)
     # These vars are host-specific, so check hostname before querying.
     if hostname.match(/^app/)
       vars['apache_user_uid'] = vagrant_ssh_cmd(hostname, "id -u www-data")
+      vars['redis_user_uid'] = vagrant_ssh_cmd(hostname, "id -u redis")
     elsif hostname.match(/^mon/)
       vars['postfix_user_uid'] = vagrant_ssh_cmd(hostname, "id -u postfix")
     end
