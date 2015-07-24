@@ -74,6 +74,62 @@
 </group>
 
 <!--
+  Cron-apt generates two types of OSSEC alerts when security updates are
+  installed
+  * OSSEC is sending multiple alerts for files changed as part of installing
+  security updates.
+  * OSSEC sends a grouped alert for new packages being installed
+
+  If these events occur during the cron-apt window group them using the 
+  `sec_update_spam` group. Events that are part of sec_update_spam group will
+  be emailed after being grouped together. This should reduce all the events 
+  related to security update to 1 email alert
+-->
+<group name="sec_update_spam">
+  <!--
+    Don't send real time alerts for file integrity changes during the cron-apt
+    window. The file changes will still be reported in the daily report.
+    * Cron-apt picks a random time to run between 04:00 and 05:00. Since
+    cron-apt could pick a time at the very end of the window and it could take
+    a few minutes to download and unpack the packages pick time window a 15 min
+    past when cron apt upgrade would run.
+  -->
+  <rule id="120001" level="7">
+    <id_sid>550</if_sid>
+    <time>04:00-05:15</time>
+    <description>File changed during the security update window</description>
+  </rule>
+
+  <rule id="120002" level="7">
+    <id_sid>551</if_sid>
+    <time>04:00-05:15</time>
+    <description>File changed again (2nd time) during the security update window</description>
+  </rule>
+
+  <rule id="120003" level="7">
+    <id_sid>552</if_sid>
+    <time>04:00-05:15</time>
+    <description>File changed again (3rd time) during the security update window</description>
+  </rule>
+
+  <rule id="120004" level="7">
+    <id_sid>553</if_sid>
+    <time>04:00-05:15</time>
+    <description>File deleted during the security update window</description>
+  </rule>
+
+  <!--
+    The system's dpkg log is monitored and will alert when new packages are
+    installed. Group these events with the rest of sec update related events
+  -->
+  <rule id="120101" level="7">
+    <id_sid>2902</if_sid>
+    <time>04:00-05:15</time>
+    <description>Debian package installed during the security update window</description>
+  </rule>
+</group>
+
+<!--
   Do not alert on stagging VM dhcp client errors. These events should not occur
   in production environments
 -->
